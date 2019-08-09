@@ -15,12 +15,22 @@ limitations under the License.
 """
 
 from subprocess import call
+from shutil import which
 import sys
 
 try:
     import PySimpleGUI as sg
 except ModuleNotFoundError:
     print("PySimpleGUI not installed! Please run python3 -m pip install PySimpleGUI before starting this program!")
+    sys.exit(1)
+
+if which("adb") == None:
+    print("ADB not installed!")
+    sg.Popup("ADB not installed! Please install ADB (comes with scrcpy on Windows), and add it to your PATH!")
+    sys.exit(1)
+if which("scrcpy") == None:
+    print("scrcpy not installed!")
+    sg.Popup("scrcpy not installed! Please install it, and add it to your PATH!")
     sys.exit(1)
 
 """
