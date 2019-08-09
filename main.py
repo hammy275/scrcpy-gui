@@ -15,12 +15,13 @@ limitations under the License.
 """
 
 from subprocess import call
+import sys
 
 try:
     import PySimpleGUI as sg
 except ModuleNotFoundError:
     print("PySimpleGUI not installed! Please run python3 -m pip install PySimpleGUI before starting this program!")
-    exit(1)
+    sys.exit(1)
 
 """
 TODO:
@@ -65,7 +66,7 @@ while True:
         window.Element("sn").Update(disabled=not(values["use_sn"])) #User must check box for option before being allowed to input said option
 if cancel: #Window closed or exit button pressed
     print("Exiting...")
-    exit(0)
+    sys.exit(0)
 
 print("Closing window...") #Close window while starting scrcpy
 window.Close()
@@ -79,7 +80,7 @@ if values["wifi_mode"]:
     print("Wi-Fi preparation.")
     if values['addr'] == '':
         sg.Popup("IP address not specified!")
-        exit(1)
+        sys.exit(1)
     else:
         call(["adb", "shell", "exit"])
         connect_to = str(values["addr"] + ":5555") #Custom port may go here at some point
@@ -102,4 +103,4 @@ if values["use_fullscreen"]:
 if values["use_touches"]:
     command.append("-t") #Assemble command
 print("Running command: " + " ".join(command))
-exit(call(command)) #Run scrcpy command and give the exit code scrcpy gives us
+sys.exit(call(command)) #Run scrcpy command and give the exit code scrcpy gives us
