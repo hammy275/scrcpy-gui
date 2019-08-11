@@ -15,8 +15,10 @@ limitations under the License.
 """
 
 from subprocess import call
-from shutil import which
+from shutil import which,rmtree
 import sys
+import os
+from platform import system
 
 try:
     import PySimpleGUI as sg
@@ -24,19 +26,66 @@ except ModuleNotFoundError:
     print("PySimpleGUI not installed! Please run python3 -m pip install PySimpleGUI before starting this program!")
     sys.exit(1)
 
-if which("adb") == None:
-    print("ADB not installed!")
-    sg.Popup("ADB not installed! Please install ADB (comes with scrcpy on Windows), and add it to your PATH!")
-    sys.exit(1)
-if which("scrcpy") == None:
-    print("scrcpy not installed!")
-    sg.Popup("scrcpy not installed! Please install it, and add it to your PATH!")
-    sys.exit(1)
+def scrcpy_install_win():
+    print("Installing scrcpy and ADB...")
+    os.chdir(os.path.expandvars("%temp%"))
+    print("Removing old scrcpy-gui-setup folder (if it exists!).")
+    try:
+        rmtree("scrcpy-gui-setup")
+    except FileNotFoundError:
+        pass
+    os.mkdir("scrcpy-gui-setup")
+    is_64bits = sys.maxsize > 2**32
+    os.chdir(os.path.expandvars("%temp%/scrcpy-gui-setup"))
+    try:
+        import requests
+    except ModuleNotFoundError:
+        print("Requests module isn't installed!")
+        sg.Popup("requests isn't installed! Please run python -m pip install PySimpleGUI before starting this program!")
+        sys.exit(1)
+    print("Downloading scrcpy zip...")
+    if is_64bits:
+        print("Choosing 64-bit version")
+        f = requests.get("https://github.com/Genymobile/scrcpy/releases/download/v1.10/scrcpy-win64-v1.10.zip")
+    else:
+        print("Choosing 32-bit version.")
+        f = requests.get("https://github.com/Genymobile/scrcpy/releases/download/v1.10/scrcpy-win32-v1.10.zip")
+    open("scrcpy.zip", "wb").write(f.content)
+    scrcpy_install = os.path.expandvars("%userprofile%/scrcpy")
+    print("Extracting ZIP to {}".format(scrcpy_install))
+    try:
+        import zipfile
+    except ModuleNotFoundError:
+        print("zipfile module isn't installed!")
+        sg.Popup("zipfile module is not installed! Please install it!")
+        sys.exit(1)
+    print("Deleting old scrcpy install area (if it exists!)")
+    with zipfile.ZipFile("scrcpy.zip", "r") as z_file:
+        try:
+            rmtree(os.path.expandvars(scrcpy_install))
+        except FileNotFoundError:
+            pass
+        print("Doing ZIP extract...")
+        os.mkdir(scrcpy_install)
+        os.chdir(scrcpy_install)
+        z_file.extractall(os.path.expandvars(scrcpy_install))
 
-"""
-TODO:
-Custom port option when Wi-Fi selected
-"""
+
+if (which("adb") == None or which("scrcpy") == None) and not(os.path.isfile(os.path.expandvars("%userprofile%/scrcpy/scrcpy.exe"))):
+    print("ADB/scrcpy not installed!")
+    osys = system()
+    osys = "Windows"
+    if osys == "Windows":
+        response = sg.PopupYesNo("Would you like to automatically install ADB and scrcpy? By doing so, you agree to any and all license agreements that come with those pieces of software!")
+        if response == "Yes":
+            scrcpy_install_win()
+        else:
+            print("Not installing! Exiting...")
+            sys.exit(1)
+    else:
+        print("OS does not support automatic installation! Exiting...")
+        sg.Popup("ADB not installed! Please install ADB (comes with scrcpy on Windows), and add it to your PATH!")
+        sys.exit(1)
 
 print("Launching GUI...")
 layout = [
@@ -80,6 +129,10 @@ if cancel: #Window closed or exit button pressed
 
 print("Closing window...") #Close window while starting scrcpy
 window.Close()
+
+if not(which("adb") != None and which("scrcpy") != None):
+    os.chdir(os.path.expandvars("%userprofile%/scrcpy/"))
+    print("Using scrcpy directory installed by scrcpy-gui!")
 
 print("Killing ADB server...") #Kill any previous ADB servers, just in case.
 call(["adb", "kill-server"])
