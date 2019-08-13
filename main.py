@@ -96,6 +96,8 @@ layout = [
     [sg.Checkbox("Custom bitrate: ", key="use_bitrate", enable_events=True), sg.InputText(key='bitrate',size=(4,None),disabled=True)],
     [sg.Checkbox("Device serial number: ", key="use_sn", enable_events=True), sg.InputText(key='sn',size=(32,None),disabled=True)],
     [sg.Checkbox("Fullscreen mode: ", key="use_fullscreen"), sg.Checkbox("Show physical screen taps: ", key="use_touches")],
+    [sg.Checkbox("Turn screen off on start: ", key="sleep_screen", enable_events=True), sg.Checkbox("Keep scrcpy window on top: ", key="on_top")],
+    [sg.Checkbox("Disable device control: ", key="no_device_control", enable_events=True)],
     [sg.Button("Start scrcpy"), sg.Button("Exit")]
     ]
 
@@ -121,6 +123,10 @@ while True:
         window.Element("resolution").Update(disabled=not(values["use_resolution"]))
     elif event == "use_bitrate":
         window.Element("bitrate").Update(disabled=not(values["use_bitrate"]))
+    elif event == "no_device_control":
+        window.Element("sleep_screen").Update(disabled=values["no_device_control"])
+    elif event == "sleep_screen":
+        window.Element("no_device_control").Update(disabled=values["sleep_screen"])
     elif event == "use_sn":
         window.Element("sn").Update(disabled=not(values["use_sn"])) #User must check box for option before being allowed to input said option
 if cancel: #Window closed or exit button pressed
@@ -164,6 +170,12 @@ if values["usb_mode"] and values["use_sn"] and values["sn"] != "":
 if values["use_fullscreen"]:
     command.append("-f")
 if values["use_touches"]:
-    command.append("-t") #Assemble command
+    command.append("-t") 
+if values["no_device_control"]:
+    command.append("-n")
+if values["sleep_screen"]:
+    command.append("-S")
+if values["on_top"]:
+    command.append("-T") #Assemble command
 print("Running command: " + " ".join(command))
 sys.exit(call(command)) #Run scrcpy command and give the exit code scrcpy gives us

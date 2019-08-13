@@ -2,6 +2,8 @@
 
 A tool allowing you to use scrcpy from a comfy GUI, without having to memorize any command-line parameters and to connect easily through Wi-Fi instead of USB!
 
+![The main interface for scrcpy-gui](readme-images/main-gui.png)
+
 ##  Requirements
 
 - A system running Windows or Linux (untested on macOS, but it should work there)
