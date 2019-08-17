@@ -18,17 +18,22 @@ from subprocess import call
 from shutil import which,rmtree
 import sys
 import os
-from platform import system
+import pip
+import distro #pip seems to use distro in some capacity and allows us to import it (I really don't understand why to be honest)
+import platform
 from time import sleep
 
 try:
     import PySimpleGUI as sg
 except ModuleNotFoundError:
-    print("PySimpleGUI not installed! Please run python3 -m pip install PySimpleGUI before starting this program!")
-    sys.exit(1)
+    pysgui_install = input("PySimpleGUI not installed! Would you like to install it [Y/n]?")
+    if pysgui_install.lower() == "y" or pysgui_install.lower() == "yes" or pysgui_install.lower() == "":
+        pip.main(["install", "PySimpleGUI"])
+        import PySimpleGUI as sg
+    else:
+        sys.exit(1)
 
 def scrcpy_install_linux():
-    print("Checking for root...")
     if os.getuid() != 0:
         sg.Popup("Root is required to complete this first time setup! Please run this script as root!")
         sys.exit(1)
@@ -38,29 +43,25 @@ def scrcpy_install_linux():
             [sg.Text("Preparing scrcpy and adb...")],
             [sg.ProgressBar(100, orientation='h', size=(20, 20), key='installbar')]
         ]
-        try:
-            import distro
-        except ModuleNotFoundError:
-            sg.Popup("Please install distro with the command python3 -m pip install distro!")
-            sys.exit(1)
         install_window = sg.Window("Installing...", bar_layout)
         bar = install_window.FindElement("installbar")
         install_window.Read(timeout=0)
         print("Installing scrcpy and ADB...")
-        bar.UpdateBar(1)
+        bar.UpdateBar(20)
         dist = distro.linux_distribution(full_distribution_name=False)
         bar.UpdateBar(3)
-        dist = ["xubuntu", 1, 2]
         if dist[0] in ["linuxmint"] or "ubuntu" in dist[0]:
             print("Detected Ubuntu-based system!")
-            print("Installing scrcpy through snap")
-            bar.UpdateBar(50)
-            os.system("snap install scrcpy")
+            bar.UpdateBar(20)
+            print("Installing scrcpy through snap and adb through apt!")
+            os.system("sudo apt install adb -y")
+            bar.UpdateBar(70)
+            os.system("sudo snap install scrcpy")
             bar.UpdateBar(100)
-            sg.Popup("Install complete! Please run scrcpy-gui as your intended user (usually not root).")
+            sg.Popup("Please run this script again as your user (not root!).")
             sys.exit(0)
         else:
-            sg.Popup("Distro does not support automatic install! Please manually install adb and scrcpy!")
+            sg.Popup("Your distro does not support automatic install! Please manually install adb and scrcpy!")
             sys.exit(1)
 
 
@@ -89,7 +90,9 @@ def scrcpy_install_win():
         import requests
     except ModuleNotFoundError:
         print("Requests module isn't installed!")
-        sg.Popup("requests isn't installed! Please run python -m pip install PySimpleGUI before starting this program!")
+        install = sg.PopupYesNo("requests isn't installed! Would you like to install it?")
+        if install == "Yes":
+            pip.main(["install", "requests"])
         sys.exit(1)
     bar.UpdateBar(3)
     print("Downloading scrcpy zip...")
@@ -125,7 +128,7 @@ def scrcpy_install_win():
 
 if (which("adb") == None or which("scrcpy") == None) and not(os.path.isfile(os.path.expandvars("%userprofile%/scrcpy/scrcpy.exe"))):
     print("ADB/scrcpy not installed!")
-    osys = system()
+    osys = platform.system()
     if osys == "Windows":
         response = sg.PopupYesNo("Would you like to automatically install ADB and scrcpy? By doing so, you agree to any and all license agreements that come with those pieces of software!")
         if response == "Yes":
@@ -147,15 +150,17 @@ if (which("adb") == None or which("scrcpy") == None) and not(os.path.isfile(os.p
 
 print("Launching GUI...")
 layout = [
-    [sg.Text("Leave your phone unplugged or unplug it now!")],
+    [sg.Text("Select options:")],
     [sg.Text("Mode: "), sg.Radio("USB", "mode", default=True, enable_events=True, key="usb_mode"), sg.Radio("Wi-Fi", "mode", enable_events=True, key="wifi_mode")],
     [sg.Text("IP Address: "), sg.InputText(key='addr', disabled=True, size=(20,None))],
+    [sg.Checkbox("Custom port: ", key="use_port", enable_events=True, disabled=True), sg.InputText(key='port',size=(8,None),disabled=True)],
     [sg.Checkbox("Custom resolution: ", key="use_resolution", enable_events=True), sg.InputText(key='resolution',size=(8,None),disabled=True)],
     [sg.Checkbox("Custom bitrate: ", key="use_bitrate", enable_events=True), sg.InputText(key='bitrate',size=(4,None),disabled=True)],
     [sg.Checkbox("Device serial number: ", key="use_sn", enable_events=True), sg.InputText(key='sn',size=(32,None),disabled=True)],
-    [sg.Checkbox("Fullscreen mode: ", key="use_fullscreen"), sg.Checkbox("Show physical screen taps: ", key="use_touches")],
-    [sg.Checkbox("Turn screen off on start: ", key="sleep_screen", enable_events=True), sg.Checkbox("Keep scrcpy window on top: ", key="on_top")],
-    [sg.Checkbox("Disable device control: ", key="no_device_control", enable_events=True)],
+    [sg.Checkbox("Fullscreen mode", key="use_fullscreen"), sg.Checkbox("Show physical screen taps", key="use_touches")],
+    [sg.Checkbox("Turn screen off on start", key="sleep_screen", enable_events=True), sg.Checkbox("Keep scrcpy window on top", key="on_top")],
+    [sg.Checkbox("Disable device control", key="no_device_control", enable_events=True)],
+    [sg.Text("If there is an option to allow USB debugging, please allow it now!")],
     [sg.Button("Start scrcpy"), sg.Button("Exit")]
     ]
 
@@ -171,12 +176,16 @@ while True:
         break
     if values["wifi_mode"] == True:
         window.Element('addr').Update(disabled=False)
+        window.Element('use_port').Update(disabled=False)
+        window.Element('port').Update(disabled=not(values['use_port']))
         window.Element('sn').Update(disabled=True)
-        window.Element('use_sn').Update(disabled=True) #Allow entering of IP address, and disable use of serial number checking
+        window.Element('use_sn').Update(disabled=True) #Allow entering of IP address and port, and disable use of serial number checking
     else:
         window.Element('addr').Update(disabled=True)
+        window.Element('use_port').Update(disabled=True)
+        window.Element('port').Update(disabled=True)
         window.Element('sn').Update(disabled=not(values["use_sn"]))
-        window.Element('use_sn').Update(disabled=False) #Disable entering of IP address, and enable use of serial number checking
+        window.Element('use_sn').Update(disabled=False) #Disable entering of IP address and port, and enable use of serial number checking
     if event == "use_resolution":
         window.Element("resolution").Update(disabled=not(values["use_resolution"]))
     elif event == "use_bitrate":
@@ -215,11 +224,23 @@ if values["wifi_mode"]:
         sg.Popup("IP address not specified!")
         sys.exit(1)
     else:
+        if values['use_port'] and values['port'] != "":
+            try:
+                port = int(values['port'])
+                if port < 0 or port > 65536:
+                    sg.Popup("Port must be between 0 and 65536!")
+                    sys.exit(1)
+                port = str(port)
+            except ValueError:
+                sg.Popup("Port must be a number!")
+                sys.exit(1)
+        else:
+            port = "5555"
         call(["adb", "shell", "exit"])
         bar.UpdateBar(10)
-        connect_to = str(values["addr"] + ":5555") #Custom port may go here at some point
+        connect_to = str(values["addr"] + ":{}".format(port)) 
         bar.UpdateBar(20)
-        call(["adb", "tcpip", "5555"]) #Custom port may go here at some point
+        call(["adb", "tcpip", port])
         bar.UpdateBar(30)
         sleep(2) #Waiting here can help things a decent amount of times
         bar.UpdateBar(35)
