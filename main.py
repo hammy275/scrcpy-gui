@@ -28,7 +28,11 @@ try:
 except ModuleNotFoundError:
     pysgui_install = input("PySimpleGUI not installed! Would you like to install it [Y/n]?")
     if pysgui_install.lower() == "y" or pysgui_install.lower() == "yes" or pysgui_install.lower() == "":
-        pip.main(["install", "PySimpleGUI"])
+        try:
+            pip.main(["install", "PySimpleGUI"])
+        except AttributeError:
+            print("Pip install error! Please manually install PySimpleGUI using the command pip install PySimpleGUI!")
+            sys.exit(1)
         import PySimpleGUI as sg
     else:
         sys.exit(1)
@@ -47,9 +51,9 @@ def scrcpy_install_linux():
         bar = install_window.FindElement("installbar")
         install_window.Read(timeout=0)
         print("Installing scrcpy and ADB...")
-        bar.UpdateBar(20)
+        bar.UpdateBar(2)
         dist = distro.linux_distribution(full_distribution_name=False)
-        bar.UpdateBar(3)
+        bar.UpdateBar(10)
         if dist[0] in ["linuxmint"] or "ubuntu" in dist[0]:
             print("Detected Ubuntu-based system!")
             bar.UpdateBar(20)
@@ -92,7 +96,12 @@ def scrcpy_install_win():
         print("Requests module isn't installed!")
         install = sg.PopupYesNo("requests isn't installed! Would you like to install it?")
         if install == "Yes":
-            pip.main(["install", "requests"])
+            try:
+                pip.main(["install", "requests"])
+            except AttributeError:
+                print("Pip install doesn't support main")
+                sg.Popup("Please manually install requests with pip install requests!")
+                sys.exit(1)
         sys.exit(1)
     bar.UpdateBar(3)
     print("Downloading scrcpy zip...")
