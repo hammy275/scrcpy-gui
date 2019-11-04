@@ -23,16 +23,15 @@ import distro #pip seems to use distro in some capacity and allows us to import 
 import platform
 from time import sleep
 
+def install(package):
+    call([sys.executable, "-m", "pip", "install", package])
+
 try:
     import PySimpleGUI as sg
 except ModuleNotFoundError:
     pysgui_install = input("PySimpleGUI not installed! Would you like to install it [Y/n]?")
     if pysgui_install.lower() == "y" or pysgui_install.lower() == "yes" or pysgui_install.lower() == "":
-        try:
-            pip.main(["install", "PySimpleGUI"])
-        except AttributeError:
-            print("Pip install error! Please manually install PySimpleGUI using the command pip install PySimpleGUI!")
-            sys.exit(1)
+        install("PySimpleGUI")
         import PySimpleGUI as sg
     else:
         sys.exit(1)
@@ -97,7 +96,7 @@ def scrcpy_install_win():
         install = sg.PopupYesNo("requests isn't installed! Would you like to install it?")
         if install == "Yes":
             try:
-                pip.main(["install", "requests"])
+                install("requests")
             except AttributeError:
                 print("Pip install doesn't support main")
                 sg.Popup("Please manually install requests with pip install requests!")
