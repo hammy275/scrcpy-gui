@@ -18,23 +18,89 @@ from subprocess import call
 from shutil import which,rmtree
 import sys
 import os
-import pip
-import distro #pip seems to use distro in some capacity and allows us to import it (I really don't understand why to be honest)
 import platform
+import json
 from time import sleep
 
+class CommandExecutionError(Exception):
+    """Error while running a command"""
+    pass
+
+
+def full(file_name):
+    """Full Path.
+
+    Converts ~'s, .'s, and ..'s to their full paths (~ to /home/username)
+
+    Args:
+        file_name (str): Path to convert
+
+    Returns:
+        str: Converted path
+
+    """
+    return os.path.abspath(os.path.expanduser(file_name))
+
+
+def get_db():
+    """Get Database.
+
+    Returns:
+        dict: Database. {} if database fails to be read or found on disk.
+
+    """
+    try:
+        with open(full("./scrcpy-gui-settings.json")) as f:
+            db = json.load(f)
+            print("Successfully loaded database!")
+    except FileNotFoundError:
+        db = {}
+        print("Couldn't find database file! Defaulting to empty database...")
+    except json.decoder.JSONDecodeError:
+        db = {}
+        print("Failed decoding database! Defaulting to new database...")
+    return db
+
+
 def install(package):
-    call([sys.executable, "-m", "pip", "install", package])
+    run([sys.executable, "-m", "pip", "install", package])
+
+
+def get_val(key, default):
+    try:
+        return db[key]
+    except KeyError:
+        return default
+
+
+def write_db():
+    try:
+        with open(full("./scrcpy-gui-settings.json"), "w") as dbf:
+            json.dump(db, dbf)
+        print("Database written!")
+    except FileNotFoundError:
+        print(json.dumps(db))
+        print("Database failed to be written and is dumped to screen!")
+
+
+db = get_db()
+
 
 try:
     import PySimpleGUI as sg
-except ModuleNotFoundError:
+except ImportError:
     pysgui_install = input("PySimpleGUI not installed! Would you like to install it [Y/n]?")
     if pysgui_install.lower() == "y" or pysgui_install.lower() == "yes" or pysgui_install.lower() == "":
         install("PySimpleGUI")
         import PySimpleGUI as sg
     else:
         sys.exit(1)
+
+def run(cmd_list):
+    err = call(cmd_list)
+    if err != 0:
+        raise CommandExecutionError("Error running {}".format(" ".join(cmd_list)))
+
 
 def scrcpy_install_linux():
     if os.getuid() != 0:
@@ -51,15 +117,27 @@ def scrcpy_install_linux():
         install_window.Read(timeout=0)
         print("Installing scrcpy and ADB...")
         bar.UpdateBar(2)
+        try:
+            import distro
+        except ImportError:
+            if pysgui_install.lower() == "y" or pysgui_install.lower() == "yes" or pysgui_install.lower() == "":
+                install("distro")
+                import distro
+            else:
+                sys.exit(1)
         dist = distro.linux_distribution(full_distribution_name=False)
-        bar.UpdateBar(10)
-        if dist[0] in ["linuxmint"] or "ubuntu" in dist[0]:
+        if dist[0] in ["linuxmint", "debian"] or "ubuntu" in dist[0]:
             print("Detected Ubuntu-based system!")
             bar.UpdateBar(20)
             print("Installing scrcpy through snap and adb through apt!")
-            os.system("sudo apt install adb -y")
+            run(["sudo", "apt", "install", "adb", "-y"])
             bar.UpdateBar(70)
-            os.system("sudo snap install scrcpy")
+            try:
+                run(["sudo", "snap", "install", "scrcpy"])
+            except CommandExecutionError:
+                if sg.PopupYesNo("snap isn't installed! Would you like scrcpy-gui to install it so we can install scrcpy?") == "Yes":
+                    run(["sudo", "apt", "install", "snapd", "-y"])
+                    run(["sudo", "snap", "install", "scrcpy"])
             bar.UpdateBar(100)
             sg.Popup("Please run this script again as your user (not root!).")
             sys.exit(0)
@@ -91,7 +169,7 @@ def scrcpy_install_win():
     os.chdir(os.path.expandvars("%temp%/scrcpy-gui-setup"))
     try:
         import requests
-    except ModuleNotFoundError:
+    except ImportError:
         print("Requests module isn't installed!")
         install = sg.PopupYesNo("requests isn't installed! Would you like to install it?")
         if install == "Yes":
@@ -117,7 +195,7 @@ def scrcpy_install_win():
     print("Extracting ZIP to {}".format(scrcpy_install))
     try:
         import zipfile
-    except ModuleNotFoundError:
+    except ImportError:
         print("zipfile module isn't installed!")
         sg.Popup("zipfile module is not installed! Please install it!")
         sys.exit(1)
@@ -133,6 +211,7 @@ def scrcpy_install_win():
         os.chdir(scrcpy_install)
         z_file.extractall(os.path.expandvars(scrcpy_install))
         bar.UpdateBar(100)
+
 
 if (which("adb") == None or which("scrcpy") == None) and not(os.path.isfile(os.path.expandvars("%userprofile%/scrcpy/scrcpy.exe"))):
     print("ADB/scrcpy not installed!")
@@ -156,18 +235,19 @@ if (which("adb") == None or which("scrcpy") == None) and not(os.path.isfile(os.p
         sg.Popup("ADB not installed! Please install ADB (comes with scrcpy on Windows), and add it to your PATH!")
         sys.exit(1)
 
+
 print("Launching GUI...")
 layout = [
     [sg.Text("Select options:")],
-    [sg.Text("Mode: "), sg.Radio("USB", "mode", default=True, enable_events=True, key="usb_mode"), sg.Radio("Wi-Fi", "mode", enable_events=True, key="wifi_mode")],
-    [sg.Text("IP Address: "), sg.InputText(key='addr', disabled=True, size=(20,None))],
-    [sg.Checkbox("Custom port: ", key="use_port", enable_events=True, disabled=True), sg.InputText(key='port',size=(8,None),disabled=True)],
-    [sg.Checkbox("Custom resolution: ", key="use_resolution", enable_events=True), sg.InputText(key='resolution',size=(8,None),disabled=True)],
-    [sg.Checkbox("Custom bitrate: ", key="use_bitrate", enable_events=True), sg.InputText(key='bitrate',size=(4,None),disabled=True)],
-    [sg.Checkbox("Device serial number: ", key="use_sn", enable_events=True), sg.InputText(key='sn',size=(32,None),disabled=True)],
-    [sg.Checkbox("Fullscreen mode", key="use_fullscreen"), sg.Checkbox("Show physical screen taps", key="use_touches")],
-    [sg.Checkbox("Turn screen off on start", key="sleep_screen", enable_events=True), sg.Checkbox("Keep scrcpy window on top", key="on_top")],
-    [sg.Checkbox("Disable device control", key="no_device_control", enable_events=True)],
+    [sg.Text("Mode: "), sg.Radio("USB", "mode", default=get_val("is_usb", True), enable_events=True, key="usb_mode"), sg.Radio("Wi-Fi", "mode", enable_events=True, key="wifi_mode", default=not(get_val("is_usb", True)))],
+    [sg.Text("IP Address: "), sg.InputText(key='addr', default_text=get_val("addr", ""), disabled=get_val("is_usb", True), size=(20,None))],
+    [sg.Checkbox("Custom port: ", key="use_port", default=get_val("use_port", False), enable_events=True, disabled=not(get_val("is_usb", True))), sg.InputText(key='port',size=(8,None),disabled=not(get_val("use_port", False)))],
+    [sg.Checkbox("Custom resolution: ", key="use_resolution", enable_events=True, default=get_val("use_resolution", False)), sg.InputText(key='resolution',size=(8,None), disabled=not(get_val("use_resolution", False)), default_text=get_val("resolution", ""))],
+    [sg.Checkbox("Custom bitrate: ", key="use_bitrate", enable_events=True, default=get_val("use_bitrate", False)), sg.InputText(key='bitrate',size=(4,None),disabled=not(get_val("use_bitrate", False)), default_text=get_val("bitrate", ""))],
+    [sg.Checkbox("Device serial number: ", key="use_sn", enable_events=True, default=get_val("use_sn", False)), sg.InputText(key='sn',size=(32,None),disabled=not(get_val("use_sn", False)), default_text=get_val("sn", ""))],
+    [sg.Checkbox("Fullscreen mode", key="use_fullscreen", default=get_val("full", False)), sg.Checkbox("Show physical screen taps", key="use_touches", default=get_val("taps", False))],
+    [sg.Checkbox("Turn screen off on start", key="sleep_screen", enable_events=True, default=get_val("sleep", False)), sg.Checkbox("Keep scrcpy window on top", key="on_top", default=get_val("top", False))],
+    [sg.Checkbox("Disable device control", key="no_device_control", enable_events=True, default=get_val("no_control", False))],
     [sg.Text("If there is an option to allow USB debugging, please allow it now!")],
     [sg.Button("Start scrcpy"), sg.Button("Exit")]
     ]
@@ -204,6 +284,24 @@ while True:
         window.Element("no_device_control").Update(disabled=values["sleep_screen"])
     elif event == "use_sn":
         window.Element("sn").Update(disabled=not(values["use_sn"])) #User must check box for option before being allowed to input said option
+
+db = {
+    "is_usb": values["usb_mode"],
+    "addr": values["addr"],
+    "use_port": values["use_port"],
+    "port": values["port"],
+    "use_resolution": values["use_resolution"], 
+    "resolution": values["resolution"],
+    "use_bitrate": values["use_bitrate"], 
+    "bitrate": values["bitrate"],
+    "use_sn": values["use_sn"], 
+    "sn": values["sn"],
+    "full": values["use_fullscreen"], "taps": values["use_touches"],
+    "sleep": values["sleep_screen"], "top": values["on_top"],
+    "no_control": values["no_device_control"]
+}
+write_db()
+
 if cancel: #Window closed or exit button pressed
     print("Exiting...")
     sys.exit(0)
@@ -212,11 +310,11 @@ print("Closing window...") #Close window while starting scrcpy
 window.Close()
 
 if not(which("adb") != None and which("scrcpy") != None):
-    os.chdir(os.path.expandvars("%userprofile%/scrcpy/"))
+    full("%userprofile%/scrcpy/")
     print("Using scrcpy directory installed by scrcpy-gui!")
 
 print("Killing ADB server...") #Kill any previous ADB servers, just in case.
-call(["adb", "kill-server"])
+run(["adb", "kill-server"])
 
 sg.Popup("Plug in your phone, then click Ok!")
 adb_layout = [
@@ -244,15 +342,15 @@ if values["wifi_mode"]:
                 sys.exit(1)
         else:
             port = "5555"
-        call(["adb", "shell", "exit"])
+        run(["adb", "shell", "exit"])
         bar.UpdateBar(10)
         connect_to = str(values["addr"] + ":{}".format(port)) 
         bar.UpdateBar(20)
-        call(["adb", "tcpip", port])
+        run(["adb", "tcpip", port])
         bar.UpdateBar(30)
         sleep(2) #Waiting here can help things a decent amount of times
         bar.UpdateBar(35)
-        call(["adb", "connect", connect_to])
+        run(["adb", "connect", connect_to])
         bar.UpdateBar(45)
         sg.Popup("Unplug your phone, then click Ok!")
 
@@ -279,4 +377,4 @@ if values["on_top"]:
     command.append("-T") #Assemble command
 bar.UpdateBar(100)
 print("Running command: " + " ".join(command))
-sys.exit(call(command)) #Run scrcpy command and give the exit code scrcpy gives us
+sys.exit(run(command)) #Run scrcpy command and give the exit code scrcpy gives us
