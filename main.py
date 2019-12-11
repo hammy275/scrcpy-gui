@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """
 Copyright 2019 hammy3502
 
@@ -23,7 +24,6 @@ import json
 from time import sleep
 
 class CommandExecutionError(Exception):
-    """Error while running a command"""
     pass
 
 
@@ -84,7 +84,13 @@ def write_db():
 
 
 db = get_db()
+is_crostini = os.path.isfile("/usr/share/themes/CrosAdapta/index.theme")
 
+try:
+    import tkinter
+except ImportError:
+    print("tkinter not installed, please install it! This can be done with 'sudo apt install python3-tk' on Debian based systems!")
+    sys.exit(1)
 
 try:
     import PySimpleGUI as sg
@@ -120,7 +126,7 @@ def scrcpy_install_linux():
         try:
             import distro
         except ImportError:
-            if pysgui_install.lower() == "y" or pysgui_install.lower() == "yes" or pysgui_install.lower() == "":
+            if sg.PopupYesNo("The 'distro' package isn't installed! Would you like scrcpy-gui to install it?") == "Yes":
                 install("distro")
                 import distro
             else:
@@ -156,7 +162,7 @@ def scrcpy_install_win():
     bar = install_window.FindElement("installbar")
     install_window.Read(timeout=0)
     print("Installing scrcpy and ADB...")
-    os.chdir(os.path.expandvars("%temp%"))
+    os.chdir(full("%temp%"))
     bar.UpdateBar(1)
     print("Removing old scrcpy-gui-setup folder (if it exists!).")
     try:
@@ -166,7 +172,7 @@ def scrcpy_install_win():
     bar.UpdateBar(2)
     os.mkdir("scrcpy-gui-setup")
     is_64bits = sys.maxsize > 2**32
-    os.chdir(os.path.expandvars("%temp%/scrcpy-gui-setup"))
+    os.chdir(full("%temp%/scrcpy-gui-setup"))
     try:
         import requests
     except ImportError:
@@ -191,7 +197,7 @@ def scrcpy_install_win():
     bar.UpdateBar(4)
     open("scrcpy.zip", "wb").write(f.content)
     bar.UpdateBar(60)
-    scrcpy_install = os.path.expandvars("%userprofile%/scrcpy")
+    scrcpy_install = full("%userprofile%/scrcpy")
     print("Extracting ZIP to {}".format(scrcpy_install))
     try:
         import zipfile
@@ -202,36 +208,44 @@ def scrcpy_install_win():
     print("Deleting old scrcpy install area (if it exists!)")
     with zipfile.ZipFile("scrcpy.zip", "r") as z_file:
         try:
-            rmtree(os.path.expandvars(scrcpy_install))
+            rmtree(full(scrcpy_install))
         except FileNotFoundError:
             pass
         bar.UpdateBar(65)
         print("Doing ZIP extract...")
         os.mkdir(scrcpy_install)
         os.chdir(scrcpy_install)
-        z_file.extractall(os.path.expandvars(scrcpy_install))
+        z_file.extractall(full(scrcpy_install))
         bar.UpdateBar(100)
 
 
-if (which("adb") == None or which("scrcpy") == None) and not(os.path.isfile(os.path.expandvars("%userprofile%/scrcpy/scrcpy.exe"))):
+if (which("adb") == None or which("scrcpy") == None) and not(os.path.isfile(full("%userprofile%/scrcpy/scrcpy.exe"))):
     print("ADB/scrcpy not installed!")
     osys = platform.system()
+    auto_install_prompt = "Would you like to automatically install ADB and scrcpy? By doing so, you agree to any and all license agreements that come with those pieces of software!"
     if osys == "Windows":
-        response = sg.PopupYesNo("Would you like to automatically install ADB and scrcpy? By doing so, you agree to any and all license agreements that come with those pieces of software!")
+        response = sg.PopupYesNo(auto_install_prompt)
         if response == "Yes":
             scrcpy_install_win()
         else:
             print("Not installing! Exiting...")
             sys.exit(1)
     elif osys == "Linux":
-        response = sg.PopupYesNo("Would you like to automatically install ADB and scrcpy? By doing so, you agree to any and all license agreements that come with those pieces of software!")
+        try:
+            response = sg.PopupYesNo(auto_install_prompt)
+        except tkinter.TclError:
+            if is_crostini:
+                print("#"*20)
+                print("Please run the following command: xhost +si:localuser:root")
+                print("#"*20)
+            sys.exit(1)
         if response == "Yes":
             scrcpy_install_linux()
         else:
             print("Not installing! Exiting...")
             sys.exit(1)
     else:
-        print("OS does not support automatic installation! Exiting...")
+        print("Your OS does not support automatic installation! Exiting...")
         sg.Popup("ADB not installed! Please install ADB (comes with scrcpy on Windows), and add it to your PATH!")
         sys.exit(1)
 
@@ -251,8 +265,14 @@ layout = [
     [sg.Text("If there is an option to allow USB debugging, please allow it now!")],
     [sg.Button("Start scrcpy"), sg.Button("Exit")]
     ]
-
-window = sg.Window('scrcpy GUI', layout=layout)
+try:
+    window = sg.Window('scrcpy GUI', layout=layout)
+except tkinter.TclError:
+    if is_crostini:
+        print("#"*20)
+        print("Please run the following command: xhost +si:localuser:root")
+        print("#"*20)
+    sys.exit(1)
 
 cancel = False #Used later to check if we should exit after breaking out of the loop
 while True:
