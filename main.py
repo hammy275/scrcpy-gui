@@ -132,24 +132,40 @@ def scrcpy_install_linux():
             else:
                 sys.exit(1)
         dist = distro.linux_distribution(full_distribution_name=False)
-        if dist[0] in ["linuxmint", "debian"] or "ubuntu" in dist[0]:
-            print("Detected Ubuntu-based system!")
-            bar.UpdateBar(20)
-            print("Installing scrcpy through snap and adb through apt!")
+        ###ADB###
+        bar.UpdateBar(10)
+        if which("apt") is not None:
+            print("Installing ADB through apt")
+            run(["sudo", "apt", "update"])
+            bar.UpdateBar(30)
             run(["sudo", "apt", "install", "adb", "-y"])
-            bar.UpdateBar(70)
-            try:
-                run(["sudo", "snap", "install", "scrcpy"])
-            except CommandExecutionError:
-                if sg.PopupYesNo("snap isn't installed! Would you like scrcpy-gui to install it so we can install scrcpy?") == "Yes":
-                    run(["sudo", "apt", "install", "snapd", "-y"])
-                    run(["sudo", "snap", "install", "scrcpy"])
-            bar.UpdateBar(100)
-            sg.Popup("Please run this script again as your user (not root!).")
-            sys.exit(0)
+        elif which("apt-get") is not None:
+            print("Installing ADB through apt-get")
+            run(["sudo", "apt-get", "update"])
+            bar.UpdateBar(30)
+            run(["sudo", "apt", "install", "adb", "-y"])
+        elif which("pacman") is not None:
+            print("Installing ADB through pacman")
+            run(["sudo", "pacman", "-Syu"])
+            bar.UpdateBar(30)
+            run(["sudo", "pacman", "-S", "android-tools"])
+        elif which("yum") is not None:
+            run(["yum", "install", "android-tools"])
         else:
-            sg.Popup("Your distro does not support automatic install! Please manually install adb and scrcpy!")
+            sg.Popup("Your OS doesn't support automatic installation of adb.")
             sys.exit(1)
+        bar.UpdateBar(60)
+        ###SCRCPY###
+        if which("snap") is not None:
+            run(["sudo", "snap", "install", "scrcpy"])
+        elif which("pacman") is not None:
+            run(["sudo", "pacman", "-S", "scrcpy"])
+        else:
+            sg.Popup("Your OS doesn't support automatic installation of scrcpy.")
+            sys.exit(1)
+        bar.UpdateBar(100)
+        sg.Popup("Please run this script again as your user (not root!).")
+        sys.exit(0)
 
 
 def scrcpy_install_win():
@@ -179,13 +195,7 @@ def scrcpy_install_win():
         print("Requests module isn't installed!")
         install = sg.PopupYesNo("requests isn't installed! Would you like to install it?")
         if install == "Yes":
-            try:
-                install("requests")
-            except AttributeError:
-                print("Pip install doesn't support main")
-                sg.Popup("Please manually install requests with pip install requests!")
-                sys.exit(1)
-        sys.exit(1)
+            install("requests")
     bar.UpdateBar(3)
     print("Downloading scrcpy zip...")
     if is_64bits:
