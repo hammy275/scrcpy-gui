@@ -63,7 +63,17 @@ def get_db():
 
 
 def install(package):
-    run([sys.executable, "-m", "pip", "install", package])
+    try:
+        run([sys.executable, "-m", "pip", "install", package])
+    except CommandExecutionError:
+        msg = "Failed to install {}! Leaving scrcpy...".format(package)
+        try:
+            sg.Popup(msg)
+        except NameError:
+            print(msg)
+        except tkinter.TclError:
+            print(msg)
+        sys.exit(1)
 
 
 def get_val(key, default):
@@ -150,6 +160,7 @@ def scrcpy_install_linux():
             bar.UpdateBar(30)
             run(["sudo", "pacman", "-S", "android-tools"])
         elif which("yum") is not None:
+            print("Installing ADB through yum")
             run(["yum", "install", "android-tools"])
         else:
             sg.Popup("Your OS doesn't support automatic installation of adb.")
@@ -157,8 +168,10 @@ def scrcpy_install_linux():
         bar.UpdateBar(60)
         ###SCRCPY###
         if which("snap") is not None:
+            print("Installing scrcpy through snap")
             run(["sudo", "snap", "install", "scrcpy"])
         elif which("pacman") is not None:
+            print("Installing scrcpy through pacman")
             run(["sudo", "pacman", "-S", "scrcpy"])
         else:
             sg.Popup("Your OS doesn't support automatic installation of scrcpy.")
