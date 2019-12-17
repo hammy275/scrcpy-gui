@@ -63,6 +63,12 @@ def get_db():
 
 
 def install(package):
+    """Install PIP Package.
+
+    Args:
+        package (str): Package from pip to install
+
+    """
     try:
         run([sys.executable, "-m", "pip", "install", package])
     except CommandExecutionError:
@@ -77,6 +83,16 @@ def install(package):
 
 
 def get_val(key, default):
+    """Get DB Value.
+
+    Args:
+        key (str): Key to get
+        default (any): Value to return if key doesn't exist
+
+    Returns:
+        any: Value at key in db.
+
+    """
     try:
         return db[key]
     except KeyError:
@@ -84,6 +100,7 @@ def get_val(key, default):
 
 
 def write_db():
+    """Write Database to File."""
     try:
         with open(full("./scrcpy-gui-settings.json"), "w") as dbf:
             json.dump(db, dbf)
@@ -113,12 +130,14 @@ except ImportError:
         sys.exit(1)
 
 def run(cmd_list):
+    """Run Command."""
     err = call(cmd_list)
     if err != 0:
         raise CommandExecutionError("Error running {}".format(" ".join(cmd_list)))
 
 
 def scrcpy_install_linux():
+    """Setup scrcpy and adb on Linux."""
     if os.getuid() != 0:
         sg.Popup("Root is required to complete this first time setup! Please run this script as root!")
         sys.exit(1)
@@ -182,6 +201,7 @@ def scrcpy_install_linux():
 
 
 def scrcpy_install_win():
+    """Setup scrcpy and adb on Windows."""
     print("Creating progress window")
     bar_layout = [
         [sg.Text("Preparing scrcpy and adb...")],
