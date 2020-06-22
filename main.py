@@ -39,7 +39,7 @@ def full(file_name):
         str: Converted path
 
     """
-    return os.path.abspath(os.path.expanduser(file_name))
+    return os.path.expandvars(os.path.abspath(os.path.expanduser(file_name)))
 
 
 def get_db():
