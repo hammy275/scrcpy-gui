@@ -130,14 +130,65 @@ def write_db():
         print("Database failed to be written and is dumped to screen!")
 
 
+def save_db(values):
+    """Save Database to File.
+
+    Args:
+        values (dict): Dictionary from user selected options
+
+    """
+    print("Saving database...")
+    global db
+    db = {
+    "is_usb": values["usb_mode"],
+    "addr": values["addr"],
+    "use_port": values["use_port"],
+    "port": values["port"],
+    "use_resolution": values["use_resolution"], 
+    "resolution": values["resolution"],
+    "use_bitrate": values["use_bitrate"], 
+    "bitrate": values["bitrate"],
+    "use_sn": values["use_sn"], 
+    "sn": values["sn"],
+    "full": values["use_fullscreen"], "taps": values["use_touches"],
+    "sleep": values["sleep_screen"], "top": values["on_top"],
+    "no_control": values["no_device_control"],
+    "use_framerate": values["use_framerate"], "framerate": values["framerate"],
+    "set_orien": values["set_orien"], "orien": values["orien"],
+    "keep_awake": values["keep_awake"]
+    }
+    write_db()
+
+
+def run(cmd_list):
+    """Run Command."""
+    err = call(cmd_list)
+    if err != 0:
+        raise CommandExecutionError("Error running {}".format(" ".join(cmd_list)))
+
+
 db = get_db()
 is_crostini = os.path.isfile("/usr/share/themes/CrosAdapta/index.theme")
 
 try:
     import tkinter
 except ImportError:
-    print("tkinter not installed, please install it! This can be done with 'sudo apt install python3-tk' on Debian based systems!")
-    sys.exit(1)
+    tkinter_install = input("tkinter not installed! Would you like to try to install it [Y/n]?")
+    if tkinter_install.lower() == "y" or tkinter_install.lower() == "yes" or tkinter_install.lower() == "":
+        if which("apt") is not None:
+            apt_install("python3-tk")
+        elif which("apt-get") is not None:
+            run(["sudo", "apt-get", "install", "python3-tk", "-y"])
+        elif which("pacman") is not None:
+            run(["sudo", "pacman", "-S", "tk", "--noconfirm"])
+        elif which("dnf") is not None:
+            run(["sudo", "dnf", "install", "python3-tkinter", "-y"])
+        else:
+            print("Your system does not support automatic installation of tkinter! Please install it!")
+            sys.exit(1)
+        import tkinter
+    else:
+        sys.exit(1)
 
 try:
     import PySimpleGUI as sg
@@ -148,12 +199,6 @@ except ImportError:
         import PySimpleGUI as sg
     else:
         sys.exit(1)
-
-def run(cmd_list):
-    """Run Command."""
-    err = call(cmd_list)
-    if err != 0:
-        raise CommandExecutionError("Error running {}".format(" ".join(cmd_list)))
 
 
 def scrcpy_install_linux():
@@ -379,7 +424,7 @@ layout = [
     [sg.Checkbox("Turn screen off on start", key="sleep_screen", enable_events=True, default=get_val("sleep", False)), sg.Checkbox("Keep scrcpy window on top", key="on_top", default=get_val("top", False))],
     [sg.Checkbox("Disable device control", key="no_device_control", enable_events=True, default=get_val("no_control", False)), sg.Checkbox("Keep device awake", key="keep_awake", enable_events=True, default=get_val("keep_awake", False))],
     [sg.Text("If there is an option to allow USB debugging, please allow it now!")],
-    [sg.Button("Start scrcpy"), sg.Button("Exit")]
+    [sg.Button("Start scrcpy"), sg.Button("Exit"), sg.Button("Save settings")]
     ]
 
 print("Launching GUI...")
@@ -398,8 +443,10 @@ while True:
     if event in (None, 'Exit'): #None if we're closing, Exit if exit button is pressed
         cancel = True
         break
-    if event == "Start scrcpy":
+    elif event == "Start scrcpy":
         break
+    elif event == "Save settings":
+        save_db(values)
     if values["wifi_mode"] == True:
         window.Element('addr').Update(disabled=False)
         window.Element('use_port').Update(disabled=False)
@@ -421,27 +468,11 @@ while True:
     elif event == "sleep_screen":
         window.Element("no_device_control").Update(disabled=values["sleep_screen"])
     elif event == "use_sn":
-        window.Element("sn").Update(disabled=not(values["use_sn"])) #User must check box for option before being allowed to input said option
+        window.Element("sn").Update(disabled=not(values["use_sn"]))
+    elif event == "set_orien":
+        window.Element("orien").Update(disabled=not(values["set_orien"])) #User must check box for option before being allowed to input said option
 
-db = {
-    "is_usb": values["usb_mode"],
-    "addr": values["addr"],
-    "use_port": values["use_port"],
-    "port": values["port"],
-    "use_resolution": values["use_resolution"], 
-    "resolution": values["resolution"],
-    "use_bitrate": values["use_bitrate"], 
-    "bitrate": values["bitrate"],
-    "use_sn": values["use_sn"], 
-    "sn": values["sn"],
-    "full": values["use_fullscreen"], "taps": values["use_touches"],
-    "sleep": values["sleep_screen"], "top": values["on_top"],
-    "no_control": values["no_device_control"],
-    "use_framerate": values["use_framerate"], "framerate": values["framerate"],
-    "set_orien": values["set_orien"], "orien": values["orien"],
-    "keep_awake": values["keep_awake"]
-}
-write_db()
+save_db(values)
 
 if cancel: #Window closed or exit button pressed
     print("Exiting...")
@@ -451,7 +482,7 @@ print("Closing window...") #Close window while starting scrcpy
 window.Close()
 
 if not(which("adb") != None and which("scrcpy") != None):
-    full("%userprofile%/scrcpy/")
+    os.chdir(full("%userprofile%/scrcpy/"))
     print("Using scrcpy directory installed by scrcpy-gui!")
 
 print("Killing ADB server...") #Kill any previous ADB servers, just in case.
