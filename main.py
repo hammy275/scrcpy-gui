@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-Copyright 2019 hammy3502
+Copyright 2020 hammy3502
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -62,17 +62,37 @@ def get_db():
     return db
 
 
-def install(package):
+def pip_install(package):
     """Install PIP Package.
 
     Args:
-        package (str): Package from pip to install
+        package (str): Package(s) from pip to install
 
     """
     try:
         run([sys.executable, "-m", "pip", "install", package])
     except CommandExecutionError:
-        msg = "Failed to install {}! Leaving scrcpy...".format(package)
+        msg = "Failed to install {}! Leaving scrcpy-gui...".format(package)
+        try:
+            sg.Popup(msg)
+        except NameError:
+            print(msg)
+        except tkinter.TclError:
+            print(msg)
+        sys.exit(1)
+
+
+def apt_install(package):
+    """Install apt Package.
+
+    Args:
+        package (str): Package(s) from apt to install
+
+    """
+    try:
+        run(["sudo", "apt", "install", package, "-y"])
+    except CommandExecutionError:
+        msg = "Failed to install {}! Leaving scrcpy-gui...".format(package)
         try:
             sg.Popup(msg)
         except NameError:
@@ -124,7 +144,7 @@ try:
 except ImportError:
     pysgui_install = input("PySimpleGUI not installed! Would you like to install it [Y/n]?")
     if pysgui_install.lower() == "y" or pysgui_install.lower() == "yes" or pysgui_install.lower() == "":
-        install("PySimpleGUI")
+        pip_install("PySimpleGUI")
         import PySimpleGUI as sg
     else:
         sys.exit(1)
@@ -156,7 +176,7 @@ def scrcpy_install_linux():
             import distro
         except ImportError:
             if sg.PopupYesNo("The 'distro' package isn't installed! Would you like scrcpy-gui to install it?") == "Yes":
-                install("distro")
+                pip_install("distro")
                 import distro
             else:
                 sys.exit(1)
@@ -182,19 +202,66 @@ def scrcpy_install_linux():
             print("Installing ADB through yum")
             run(["yum", "install", "android-tools"])
         else:
-            sg.Popup("Your OS doesn't support automatic installation of adb.")
-            sys.exit(1)
+            pass  # Use compile from source below
         bar.UpdateBar(60)
         ###SCRCPY###
-        if which("snap") is not None:
-            print("Installing scrcpy through snap")
-            run(["sudo", "snap", "install", "scrcpy"])
-        elif which("pacman") is not None:
+        if which("pacman") is not None:
             print("Installing scrcpy through pacman")
             run(["sudo", "pacman", "-S", "scrcpy"])
         else:
-            sg.Popup("Your OS doesn't support automatic installation of scrcpy.")
-            sys.exit(1)
+            if which("apt") is not None:
+                print("Compiling and installing scrcpy from source!")
+                print("Installing requirements through apt!")
+                apt_install("git")
+                bar.UpdateBar(63)
+                print("Compiling and installing scrcpy")
+                os.chdir("/tmp/")
+                try:
+                    rmtree("/tmp/scrcpy-gui-setup")
+                except FileNotFoundError:
+                    pass
+                os.mkdir("/tmp/scrcpy-gui-setup")
+                os.chdir("/tmp/scrcpy-gui-setup/")
+                ecode = call(["git", "clone", "--branch", "v1.14", "https://github.com/Genymobile/scrcpy.git"])
+                if ecode != 0:
+                    print("Error getting source code! Please check the error log above! Exiting setup...")
+                    sys.exit(1)
+                bar.UpdateBar(65)
+                print("Getting compile dependencies...")
+                apt_install("ffmpeg libsdl2-2.0-0")
+                bar.UpdateBar(70)
+                apt_install("gcc git pkg-config meson ninja-build")
+                bar.UpdateBar(75)
+                apt_install("libavcodec-dev libavformat-dev libavutil-dev")
+                bar.UpdateBar(80)
+                apt_install("libsdl2-dev")
+                bar.UpdateBar(82)
+                os.chdir("/tmp/scrcpy-gui-setup/scrcpy")
+                print("Getting pre-built server binary")
+                ecode = call(["wget", "https://github.com/Genymobile/scrcpy/releases/download/v1.14/scrcpy-server-v1.14"])
+                if ecode != 0:
+                    print("Error getting server JAR! Please see the error above! Exiting...")
+                    sys.exit(1)
+                os.rename("scrcpy-server-v1.14", "server.jar")
+                bar.UpdateBar(88)
+                print("Compiling...")
+                ecode = call(["meson", "x", "--buildtype", "release", "--strip", "-Db_lto=true", "-Dprebuilt_server=/tmp/scrcpy-gui-setup/scrcpy/server.jar"])
+                if ecode != 0:
+                    print("Error while compiling! Exiting...")
+                    sys.exit(1)
+                bar.UpdateBar(93)
+                ecode = call(["ninja", "-Cx"])
+                if ecode != 0:
+                    print("Error while compiling! Exiting...")
+                    sys.exit(1)
+                bar.UpdateBar(97)
+                ecode = call(["sudo", "ninja", "-Cx", "install"])
+                if ecode != 0:
+                    print("Error while installing! Exiting...")
+                    sys.exit(1)
+            else:
+                sg.Popup("Your OS doesn't support automatic installation of scrcpy.")
+                sys.exit(1)
         bar.UpdateBar(100)
         sg.Popup("Please run this script again as your user (not root!).")
         sys.exit(0)
@@ -228,7 +295,7 @@ def scrcpy_install_win():
         print("Requests module isn't installed!")
         install = sg.PopupYesNo("requests isn't installed! Would you like to install it?")
         if install == "Yes":
-            install("requests")
+            pip_install("requests")
     bar.UpdateBar(3)
     print("Downloading scrcpy zip...")
     if is_64bits:
@@ -293,7 +360,13 @@ if (which("adb") == None or which("scrcpy") == None) and not(os.path.isfile(full
         sys.exit(1)
 
 
-print("Launching GUI...")
+print("Building GUI...")
+rotation_options = {
+    "Natural orientation": "0",
+    "90 degrees counterclockwise": "1",
+    "180 degrees": "2",
+    "90 degrees clockwise": "3"
+}
 layout = [
     [sg.Text("Select options:")],
     [sg.Text("Mode: "), sg.Radio("USB", "mode", default=get_val("is_usb", True), enable_events=True, key="usb_mode"), sg.Radio("Wi-Fi", "mode", enable_events=True, key="wifi_mode", default=not(get_val("is_usb", True)))],
@@ -302,12 +375,16 @@ layout = [
     [sg.Checkbox("Custom resolution: ", key="use_resolution", enable_events=True, default=get_val("use_resolution", False)), sg.InputText(key='resolution',size=(8,None), disabled=not(get_val("use_resolution", False)), default_text=get_val("resolution", ""))],
     [sg.Checkbox("Custom bitrate: ", key="use_bitrate", enable_events=True, default=get_val("use_bitrate", False)), sg.InputText(key='bitrate',size=(4,None),disabled=not(get_val("use_bitrate", False)), default_text=get_val("bitrate", ""))],
     [sg.Checkbox("Device serial number: ", key="use_sn", enable_events=True, default=get_val("use_sn", False)), sg.InputText(key='sn',size=(32,None),disabled=not(get_val("use_sn", False)), default_text=get_val("sn", ""))],
+    [sg.Checkbox("Set maximum framerate: ", key="use_framerate", enable_events=True, default=get_val("use_framerate", False)), sg.InputText(key='framerate',size=(4,None), disabled=not(get_val("use_framerate", True)), default_text=get_val("framerate", ""))],
+    [sg.Checkbox("Set Orientation: ", key="set_orien", enable_events=True, default=get_val("set_orien", False)), sg.Combo(list(rotation_options.keys()), key="orien", disabled=not(get_val("set_orien", True)), default_value=get_val("orien", ""))],
     [sg.Checkbox("Fullscreen mode", key="use_fullscreen", default=get_val("full", False)), sg.Checkbox("Show physical screen taps", key="use_touches", default=get_val("taps", False))],
     [sg.Checkbox("Turn screen off on start", key="sleep_screen", enable_events=True, default=get_val("sleep", False)), sg.Checkbox("Keep scrcpy window on top", key="on_top", default=get_val("top", False))],
-    [sg.Checkbox("Disable device control", key="no_device_control", enable_events=True, default=get_val("no_control", False))],
+    [sg.Checkbox("Disable device control", key="no_device_control", enable_events=True, default=get_val("no_control", False)), sg.Checkbox("Keep device awake", key="keep_awake", enable_events=True, default=get_val("keep_awake", False))],
     [sg.Text("If there is an option to allow USB debugging, please allow it now!")],
     [sg.Button("Start scrcpy"), sg.Button("Exit")]
     ]
+
+print("Launching GUI...")
 try:
     window = sg.Window('scrcpy GUI', layout=layout)
 except tkinter.TclError:
@@ -361,7 +438,10 @@ db = {
     "sn": values["sn"],
     "full": values["use_fullscreen"], "taps": values["use_touches"],
     "sleep": values["sleep_screen"], "top": values["on_top"],
-    "no_control": values["no_device_control"]
+    "no_control": values["no_device_control"],
+    "use_framerate": values["use_framerate"], "framerate": values["framerate"],
+    "set_orien": values["set_orien"], "orien": values["orien"],
+    "keep_awake": values["keep_awake"]
 }
 write_db()
 
@@ -428,8 +508,15 @@ if values["use_bitrate"] and values["bitrate"] != "":
     command.append("-b " + values["bitrate"])
 if values["usb_mode"] and values["use_sn"] and values["sn"] != "":
     command.append("-s " + values["sn"])
+if values["use_framerate"] and values["framerate"] != "":
+    try:
+        command.append("--max-fps " + str(int(values["framerate"])))  # Conversion makes sure we have a number
+    except ValueError:
+        print("Skipping framerate max because it isn't a number!")
 if values["use_fullscreen"]:
     command.append("-f")
+if values["set_orien"]:
+    command.append("--lock-video-orientation " + rotation_options[values["orien"]])
 if values["use_touches"]:
     command.append("-t") 
 if values["no_device_control"]:
@@ -437,7 +524,9 @@ if values["no_device_control"]:
 if values["sleep_screen"]:
     command.append("-S")
 if values["on_top"]:
-    command.append("-T") #Assemble command
+    command.append("-T")
+if values["keep_awake"]:
+    command.append("-w") #Assemble command
 bar.UpdateBar(100)
 print("Running command: " + " ".join(command))
-sys.exit(run(command)) #Run scrcpy command and give the exit code scrcpy gives us
+sys.exit(os.system(" ".join(command)) / 256) #Run scrcpy command and give the exit code scrcpy gives us
