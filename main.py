@@ -195,19 +195,17 @@ def scrcpy_install_linux():
             run(["sudo", "apt", "install", "adb", "-y"])
         elif which("pacman") is not None:
             print("Installing ADB through pacman")
-            run(["sudo", "pacman", "-Syu"])
-            bar.UpdateBar(30)
-            run(["sudo", "pacman", "-S", "android-tools"])
+            run(["sudo", "pacman", "-S", "android-tools", "--noconfirm"])
         elif which("yum") is not None:
             print("Installing ADB through yum")
-            run(["yum", "install", "android-tools"])
+            run(["yum", "-y", "install", "android-tools"])
         else:
-            pass  # Use compile from source below
+            pass  # Attempt to use compile from source below
         bar.UpdateBar(60)
         ###SCRCPY###
         if which("pacman") is not None:
             print("Installing scrcpy through pacman")
-            run(["sudo", "pacman", "-S", "scrcpy"])
+            run(["sudo", "pacman", "-S", "scrcpy", "--noconfirm"])
         else:
             if which("apt") is not None:
                 print("Compiling and installing scrcpy from source!")
