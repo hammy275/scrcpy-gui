@@ -114,7 +114,10 @@ def get_val(key, default):
 
     """
     try:
-        return db[key]
+        val = db[key]
+        if val is not None:
+            return val
+        return default
     except KeyError:
         return default
 
